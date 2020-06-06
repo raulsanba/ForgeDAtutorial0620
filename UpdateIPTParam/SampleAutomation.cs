@@ -32,7 +32,7 @@ namespace UpdateIPTParam
     [ComVisible(true)]
     public class SampleAutomation
     {
-        private readonly InventorServer inventorApplication;
+        private InventorServer inventorApplication;
 
         public SampleAutomation(InventorServer inventorApp)
         {
@@ -50,7 +50,7 @@ namespace UpdateIPTParam
                 var docDir = System.IO.Path.GetDirectoryName(doc.FullFileName);
 
                 //save output file
-                var documentType == doc.DocumentType;
+                var documentType = doc.DocumentType;
                 if (documentType == DocumentTypeEnum.kPartDocumentObject)
                 {
                     //the name needs to be in sync with OutputIpt localName in Activity
@@ -123,10 +123,13 @@ namespace UpdateIPTParam
         /// </summary>
         /// 
 
-        private static void LogTrace(string format, params object[] args) { Trace.TraceInformation(format, args); }
+        private static void LogTrace(string format, params object[] args)
+        {
+            Trace.TraceInformation(format, args); 
+        }
 
-
-
+//the section below comes with plugin framework by default
+/*
         public void RunWithArguments(Document doc, NameValueMap map)
         {
             LogTrace("Processing " + doc.FullFileName);
@@ -188,6 +191,6 @@ namespace UpdateIPTParam
             Trace.TraceError(message);
         }
 
-        #endregion
+        #endregion*/
     }
 }
