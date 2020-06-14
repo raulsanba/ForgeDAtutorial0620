@@ -23,7 +23,7 @@ using WorkItem = Autodesk.Forge.DesignAutomation.Model.WorkItem;
 using WorkItemStatus = Autodesk.Forge.DesignAutomation.Model.WorkItemStatus;
 
 
-namespace forgeSample.Controllers
+namespace ForgeTutorialDA040620.Controllers
 {
     [ApiController]
     public class DesignAutomationController : ControllerBase
@@ -87,9 +87,11 @@ namespace forgeSample.Controllers
         //Method to define a new AppBundle
         [HttpPost]
         [Route("api/forge/designautomation/appbundles")]
-        public async Task<IActionResult> CreateAppBundle()
+        public async Task<IActionResult> CreateAppBundle([FromBody]JObject appBundleSpecs)
         {
-            //input validation
+            //input validation 
+
+
             string zipFileName = appBundleSpecs["zipFileName"].Value<string>();
             string engineName = appBundleSpecs["engine"].Value<string>();
 
@@ -104,7 +106,7 @@ namespace forgeSample.Controllers
             }
 
             //get defined AppBundles
-            Page<string> appBundles = await _designAutomation.GetAppBundleAsync();
+            Page<string> appBundles = await _designAutomation.GetAppBundlesAsync();
 
             //check if AppBundle is already defined
             dynamic newAppVersion;
@@ -119,6 +121,18 @@ namespace forgeSample.Controllers
                     Id = appBundleName,
                     Description = string.Format("Description for {0}", appBundleName)
                 };
+                newAppVersion = await _designAutomation.CreateAppBundleAsync(appBundleSpec);
+                if(newAppVersion == null)
+                {
+                    throw new Exception("Cannot create new app");
+                }
+                //create alias pointing to V1
+                Alias aliasSpec = new Alias()
+                {
+                    Id = Alias,
+                    Version = 1
+                };
+
             }
             else
             {
@@ -142,6 +156,18 @@ namespace forgeSample.Controllers
             }
 
             //upload the zip with .bundle
+            RestClient uploadClient = new RestClient(newAppVersion.UploadParameters.EndpointURL);
+            RestRequest request = new RestRequest(string.Empty, Method.POST);
+            request.AlwaysMultipartFormData = true;
+            foreach (KeyValuePair<string, string> x in newAppVersion.UploadParameters.FormData) request.AddParameter(x.Key, x.Value);
+            request.AddFile("file", packageZipPath);
+            await uploadClient.ExecuteTaskAsync(request);
+
+            return Ok(new
+            {
+                AppBundle = qualifiedAppBundleId,
+                Version = newAppVersion.Version
+            });
         }
     }
 
