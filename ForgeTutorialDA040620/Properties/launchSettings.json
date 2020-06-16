@@ -16,7 +16,7 @@
         "ASPNETCORE_URLS": "http://localhost:3000",
         "FORGE_CLIENT_ID": "sQ4LGaoyPbSviTFJ1iNDrcpEOGWUJcsk",
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "FORGE_WEBHOOK_URL": "http://584f2dd6fdde.ngrok.io"
+        "FORGE_WEBHOOK_URL": "http://0e750dc46c2f.ngrok.io"
       }
     },
     "ForgeTutorialDA040620": {
