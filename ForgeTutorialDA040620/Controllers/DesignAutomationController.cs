@@ -61,135 +61,25 @@ namespace ForgeTutorialDA040620.Controllers
         }
 
 
-        // **********************************
-        //
-        // Next we will add the methods here
-        //
-        // **********************************
-
         //Method for GetLocalBundles->Look at the bundles folder and return a list of .ZIP files
 
+        //Get all activities defined for this account
         [HttpGet]
-        [Route("api/appbundles")]
-        public string[] GetLocalBundles()
+        [Route("api/forge/designautomation/activities")]
+        public async Task<List<string>> GetDefinedActivities()
         {
-            return Directory.GetFiles(LocalBundlesFolder, "*.zip").Select(Path.GetFileNameWithoutExtension).ToArray();
-        }
-
-        //Method to return list of available engines
-        [HttpGet]
-        [Route("api/forge/designautomation/engines")]
-        public async Task<List<string>> GetAvailableEngines()
-        {
-            dynamic oauth = await oAuthController.GetInternalAsync();
-
-            //define engines API.Page class:represent a WebForms page, requested from a server that hosts an ASP.NET web app(https://docs.microsoft.com/en-us/dotnet/api/system.web.ui.page?view=netframework-4.8)
-            Page<string> engines = await _designAutomation.GetEnginesAsync();
-            engines.Data.Sort();
-
-            return engines.Data;
-        }
-
-        //Method to define a new AppBundle
-        [HttpPost]
-        [Route("api/forge/designautomation/appbundles")]
-        public async Task<IActionResult> CreateAppBundle([FromBody] JObject appBundleSpecs)
-        {
-            //input validation 
-
-
-            string zipFileName = appBundleSpecs["zipFileName"].Value<string>();
-            string engineName = appBundleSpecs["engine"].Value<string>();
-
-            //standard name for this sample
-            string appBundleName = zipFileName + "AppBundle";
-
-            //check if ZIP with bundle is here
-            string packageZipPath = Path.Combine(LocalBundlesFolder, zipFileName + ".zip");
-            if (!System.IO.File.Exists(packageZipPath))
-            {
-                throw new Exception("AppBundle not found at " + packageZipPath);
-            }
-
-            //get defined AppBundles
-            Page<string> appBundles = await _designAutomation.GetAppBundlesAsync();
-
-            //check if AppBundle is already defined
-            dynamic newAppVersion;
-            string qualifiedAppBundleId = string.Format("{0}.{1}+{2}", NickName, appBundleName, Alias);
-            if (!appBundles.Data.Contains(qualifiedAppBundleId))
-            {
-                //create an appbundle in version 1
-                AppBundle appBundleSpec = new AppBundle()
+            //filter list of
+            Page<string> activities = await _designAutomation.GetActivitiesAsync();
+            List<string> definedActivities = new List<string>();
+            foreach (string activity in activities.Data)
+                if (activity.StartsWith(NickName) && activity.IndexOf("$LATEST") == -1)
                 {
-                    Package = appBundleName,
-                    Engine = engineName,
-                    Id = appBundleName,
-                    Description = string.Format("Description for {0}", appBundleName)
-                };
-                newAppVersion = await _designAutomation.CreateAppBundleAsync(appBundleSpec);
-                if (newAppVersion == null)
-                {
-                    throw new Exception("Cannot create new app");
+                    definedActivities.Add(activity.Replace(NickName + ".", String.Empty));
                 }
-                //create alias pointing to V1
-                Alias aliasSpec = new Alias()
-                {
-                    Id = Alias,
-                    Version = 1
-                };
-                Alias newAlias = await _designAutomation.CreateAppBundleAliasAsync(appBundleName, aliasSpec);
 
-            }
-            else
-            {
-                //create new version
-                AppBundle appBundleSpec = new AppBundle()
-                {
-                    Engine = engineName,
-                    Description = appBundleName
-                };
-                newAppVersion = await _designAutomation.CreateAppBundleVersionAsync(appBundleName, appBundleSpec);
-                if (newAppVersion == null)
-                {
-                    throw new Exception("Cannot create new version");
-                }
-                //update alias pointing to V+1
-                AliasPatch aliasSpec = new AliasPatch()
-                {
-                    Version = newAppVersion.Version
-                };
-                Alias newAlias = await _designAutomation.ModifyAppBundleAliasAsync(appBundleName, Alias, aliasSpec);
-            }
-
-            //upload the zip with .bundle
-            RestClient uploadClient = new RestClient(newAppVersion.UploadParameters.EndpointURL);
-            RestRequest request = new RestRequest(string.Empty, Method.POST);
-            request.AlwaysMultipartFormData = true;
-            foreach (KeyValuePair<string, string> x in newAppVersion.UploadParameters.FormData) request.AddParameter(x.Key, x.Value);
-            request.AddFile("file", packageZipPath);
-            request.AddHeader("Cache-Control", "no-cache");
-            await uploadClient.ExecuteTaskAsync(request);
-
-            return Ok(new
-            {
-                AppBundle = qualifiedAppBundleId,
-                Version = newAppVersion.Version
-            });
-
-
+            return definedActivities;
         }
 
-        //Define Activity Methods
-        //Identify engine. I will congifure Inventor only
-        private dynamic EngineAttributes(string engine)
-        {
-            if (engine.Contains("3dsMax")) return new { commandLine = @"$(engine.path)\\3dsmaxbatch.exe -sceneFile $(args[inputFile].path) $(settings[script].path)", extension = "max", script = "da = dotNetClass(\"Autodesk.Forge.Sample.DesignAutomation.Max.RuntimeExecute\")\nda.ModifyWindowWidthHeight()\n" };
-            if (engine.Contains("AutoCAD")) return new { commandLine = "$(engine.path)\\accoreconsole.exe /i $(args[inputFile].path) /al $(appbundles[{0}].path) /s $(settings[script].path)", extension = "dwg", script = "UpdateParam\n" };
-            if (engine.Contains("Inventor")) return new { commandLine = "$(engine.path)\\InventorCoreConsole.exe /i $(args[inputFile].path) /al $(appbundles[{0}].path)", extension = "ipt", script = string.Empty };
-            if (engine.Contains("Revit")) return new { commandLine = "$(engine.path)\\revitcoreconsole.exe /i $(args[inputFile].path) /al $(appbundles[{0}].path)", extension = "rvt", script = string.Empty };
-            throw new Exception("Invalid engine");
-        }
 
         //Define a new Activity
         [HttpPost]
@@ -241,43 +131,120 @@ namespace ForgeTutorialDA040620.Controllers
             return Ok(new { Activity = "Activity already defined" });
         }
 
-
-
-        //Method to return all defined activities.It will only return activities defined by Client ID
-
-        //Get all activities defined for this account
-        [HttpGet]
-        [Route("api/forge/designautomation/activities")]
-        public async Task<List<string>> GetDefinedActivities()
+        //Define Activity Methods
+        //Identify engine. I will congifure Inventor only
+        private dynamic EngineAttributes(string engine)
         {
-            //filter list of
-            Page<string> activities = await _designAutomation.GetActivitiesAsync();
-            List<string> definedActivities = new List<string>();
-            foreach (string activity in activities.Data)
-                if (activity.StartsWith(NickName) && activity.IndexOf("$LATEST") == -1)
-                {
-                    definedActivities.Add(activity.Replace(NickName + ".", String.Empty));
-                }
-
-            return definedActivities;
+            if (engine.Contains("3dsMax")) return new { commandLine = @"$(engine.path)\\3dsmaxbatch.exe -sceneFile $(args[inputFile].path) $(settings[script].path)", extension = "max", script = "da = dotNetClass(\"Autodesk.Forge.Sample.DesignAutomation.Max.RuntimeExecute\")\nda.ModifyWindowWidthHeight()\n" };
+            if (engine.Contains("AutoCAD")) return new { commandLine = "$(engine.path)\\accoreconsole.exe /i $(args[inputFile].path) /al $(appbundles[{0}].path) /s $(settings[script].path)", extension = "dwg", script = "UpdateParam\n" };
+            if (engine.Contains("Inventor")) return new { commandLine = "$(engine.path)\\inventorcoreconsole.exe /i \"$(args[inputFile].path)\" /al \"$(appbundles[{0}].path)\"", extension = "ipt", script = string.Empty };
+            if (engine.Contains("Revit")) return new { commandLine = "$(engine.path)\\revitcoreconsole.exe /i $(args[inputFile].path) /al $(appbundles[{0}].path)", extension = "rvt", script = string.Empty };
+            throw new Exception("Invalid engine");
         }
 
-        [HttpDelete]
-        [Route("api/forge/designautomation/account")]
-        public async Task<IActionResult> ClearAccount()
+
+        //Method to define a new AppBundle
+        [HttpPost]
+        [Route("api/forge/designautomation/appbundles")]
+        public async Task<IActionResult> CreateAppBundle([FromBody] JObject appBundleSpecs)
         {
-            await _designAutomation.DeleteForgeAppAsync("me");
-            return Ok();
+            //input validation 
+
+
+            string zipFileName = appBundleSpecs["zipFileName"].Value<string>();
+            string engineName = appBundleSpecs["engine"].Value<string>();
+
+            //standard name for this sample
+            string appBundleName = zipFileName + "AppBundle";
+
+            //check if ZIP with bundle is here
+            string packageZipPath = Path.Combine(LocalBundlesFolder, zipFileName + ".zip");
+            if (!System.IO.File.Exists(packageZipPath))
+            {
+                throw new Exception("AppBundle not found at " + packageZipPath);
+            }
+
+            //get defined AppBundles
+            Page<string> appBundles = await _designAutomation.GetAppBundlesAsync();
+
+            //check if AppBundle is already defined
+            dynamic newAppVersion;
+            string qualifiedAppBundleId = string.Format("{0}.{1}+{2}", NickName, appBundleName, Alias);
+            if (!appBundles.Data.Contains(qualifiedAppBundleId))
+            {
+                //create an appbundle in version 1
+                AppBundle appBundleSpec = new AppBundle()
+                {
+                    Package = appBundleName,
+                    Engine = engineName,
+                    Id = appBundleName,
+                    Description = string.Format("Description for {0}", appBundleName),
+                };
+                newAppVersion = await _designAutomation.CreateAppBundleAsync(appBundleSpec);
+                if (newAppVersion == null)
+                {
+                    throw new Exception("Cannot create new app");
+                }
+                //create alias pointing to V1
+                Alias aliasSpec = new Alias()
+                {
+                    Id = Alias,
+                    Version = 1
+                };
+                Alias newAlias = await _designAutomation.CreateAppBundleAliasAsync(appBundleName, aliasSpec);
+
+            }
+            else
+            {
+                //create new version
+                AppBundle appBundleSpec = new AppBundle()
+                {
+                    Engine = engineName,
+                    Description = appBundleName
+                };
+                newAppVersion = await _designAutomation.CreateAppBundleVersionAsync(appBundleName, appBundleSpec);
+                if (newAppVersion == null)
+                {
+                    throw new Exception("Cannot create new version");
+                }
+                //update alias pointing to V+1
+                AliasPatch aliasSpec = new AliasPatch()
+                {
+                    Version = newAppVersion.Version
+                };
+                Alias newAlias = await _designAutomation.ModifyAppBundleAliasAsync(appBundleName, Alias, aliasSpec);
+            }
+
+            //upload the zip with .bundle
+            RestClient uploadClient = new RestClient(newAppVersion.UploadParameters.EndpointURL);
+            RestRequest request = new RestRequest(string.Empty, Method.POST);
+            request.AlwaysMultipartFormData = true;
+            foreach (KeyValuePair<string, string> x in newAppVersion.UploadParameters.FormData) request.AddParameter(x.Key, x.Value);
+            request.AddFile("file", packageZipPath);
+            request.AddHeader("Cache-Control", "no-cache");
+            await uploadClient.ExecuteTaskAsync(request);
+
+            return Ok(new
+            {
+                AppBundle = qualifiedAppBundleId,
+                Version = newAppVersion.Version
+            });
+        }
+
+        public class StartWorkitemInput
+        {
+            public IFormFile inputFile { get; set; }
+            public string data { get; set; }
         }
 
         //Start a new WorkItem
         [HttpPost]
         [Route("api/forge/designautomation/workitems")]
-        public async Task<IActionResult> StartWorkitem([FromForm] StartWorkitemInput input)
+        public async Task<IActionResult> StartWorkitem([FromForm]StartWorkitemInput input)
         {
             JObject workItemData = JObject.Parse(input.data);
             string widthParam = workItemData["width"].Value<string>();
-            string heigthParam = workItemData["height"].Value<string>();
+            string heightParam = workItemData["height"].Value<string>();
             string activityName = string.Format("{0}.{1}", NickName, workItemData["activityName"].Value<string>());
             string browerConnectionId = workItemData["browerConnectionId"].Value<string>();
 
@@ -295,8 +262,8 @@ namespace ForgeTutorialDA040620.Controllers
             buckets.Configuration.AccessToken = oauth.access_token;
             try
             {
-                PostBucketsPayload bucketsPayload = new PostBucketsPayload(bucketKey, null, PostBucketsPayload.PolicyKeyEnum.Transient);
-                await buckets.CreateBucketAsync(bucketsPayload, "US");
+                PostBucketsPayload bucketPayload = new PostBucketsPayload(bucketKey, null, PostBucketsPayload.PolicyKeyEnum.Transient);
+                await buckets.CreateBucketAsync(bucketPayload, "US");
             }
             catch { }
             //In case bucket exists
@@ -317,16 +284,16 @@ namespace ForgeTutorialDA040620.Controllers
                 Url = string.Format("https://developer.api.autodesk.com/oss/v2/buckets/{0}/objects/{1}", bucketKey, inputFileNameOSS),
                 Headers = new Dictionary<string, string>()
                 {
-                    {"Autorization", "Bearer"+oauth.access_token }
+                    {"Authorization", "Bearer" + oauth.access_token }
                 }
             };
             //2.input json
             dynamic inputJson = new JObject();
             inputJson.Width = widthParam;
-            inputJson.Heigth = heigthParam;
+            inputJson.Height = heightParam;
             XrefTreeArgument inputJsonArgument = new XrefTreeArgument()
             {
-                Url = "data:application/json" + ((JObject)inputJson).ToString(Formatting.None).Replace("\"", "'")
+                Url = "data:application/json, " + ((JObject)inputJson).ToString(Formatting.None).Replace("\"", "'")
             };
             //3.output file
             string outputFileNameOSS = string.Format("{0}_output_{1}", DateTime.Now.ToString("yyyyMMddhhmmss"), Path.GetFileName(input.inputFile.FileName)); // avoid overriding
@@ -338,8 +305,6 @@ namespace ForgeTutorialDA040620.Controllers
                 {
                     { "Authorization", "Bearer " + oauth.access_token }
                 }
-
-
             };
 
             //prepare and submit workitem
@@ -361,18 +326,12 @@ namespace ForgeTutorialDA040620.Controllers
             return Ok(new { WorkItemId = workItemStatus.Id });
         }
 
-        public class StartWorkitemInput
-        {
-            public IFormFile inputFile { get; set; }
-            public string data { get; set; }
-        }
-
         /// <summary>
         /// Callback from Design Automation Workitem (onProgress or onComplete)
         /// </summary>
         [HttpPost]
         [Route("/api/forge/callback/designautomation")]
-        public async Task<IActionResult> OnCallback(string id, string outputFileName, [FromBody] dynamic body)
+        public async Task<IActionResult> OnCallback(string id, string outputFileName, [FromBody]dynamic body)
         {
             try
             {
@@ -393,15 +352,43 @@ namespace ForgeTutorialDA040620.Controllers
                 dynamic signedUrl = await objectsApi.CreateSignedResourceAsyncWithHttpInfo(NickName.ToLower() + "-designautomation", outputFileName, new PostBucketsSigned(10), "read");
                 await _hubContext.Clients.Client(id).SendAsync("downloadResult", (string)(signedUrl.Data.signedUrl));
             }
-            catch { }
+            catch (Exception e){ }
 
             // ALWAYS return ok (200)
             return Ok();
         }
 
+        //Method to return list of available engines
+        [HttpGet]
+        [Route("api/forge/designautomation/engines")]
+        public async Task<List<string>> GetAvailableEngines()
+        {
+            dynamic oauth = await oAuthController.GetInternalAsync();
+
+            //define engines API.Page class:represent a WebForms page, requested from a server that hosts an ASP.NET web app(https://docs.microsoft.com/en-us/dotnet/api/system.web.ui.page?view=netframework-4.8)
+            Page<string> engines = await _designAutomation.GetEnginesAsync();
+            engines.Data.Sort();
+
+            return engines.Data;
+        }
+
+        [HttpDelete]
+        [Route("api/forge/designautomation/account")]
+        public async Task<IActionResult> ClearAccount()
+        {
+            await _designAutomation.DeleteForgeAppAsync("me");
+            return Ok();
+        }
+
+
+        [HttpGet]
+        [Route("api/appbundles")]
+        public string[] GetLocalBundles()
+        {
+            return Directory.GetFiles(LocalBundlesFolder, "*.zip").Select(Path.GetFileNameWithoutExtension).ToArray();
+        }
 
     }
-
 
         /// <summary>
         /// Class uses for SignalR
@@ -410,6 +397,5 @@ namespace ForgeTutorialDA040620.Controllers
         {
             public string GetConnectionId() { return Context.ConnectionId; }
         }
-    
-    
+   
 }

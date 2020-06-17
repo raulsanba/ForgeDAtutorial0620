@@ -8,6 +8,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Autodesk.Forge.Core;
 using Autodesk.Forge.DesignAutomation;
+using Microsoft.AspNetCore;
 
 namespace ForgeTutorialDA040620
 {
@@ -24,11 +25,9 @@ namespace ForgeTutorialDA040620
             }).Build().Run();
         }
 
-        public static IHostBuilder CreateHostBuilder(string[] args) =>
-            Host.CreateDefaultBuilder(args)
-                .ConfigureWebHostDefaults(webBuilder =>
-                {
-                    webBuilder.UseStartup<Startup>();
-                });
+        public static IWebHostBuilder CreateHostBuilder(string[] args) =>
+            WebHost.CreateDefaultBuilder(args)
+                .UseStartup<Startup>();
+
     }
 }

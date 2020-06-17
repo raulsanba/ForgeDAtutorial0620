@@ -54,7 +54,7 @@ namespace ForgeTutorialDA040620.Controllers
 
         public static string GetAppSetting(string settingKey)
         {
-            return Environment.GetEnvironmentVariable(settingKey);
+            return Environment.GetEnvironmentVariable(settingKey).Trim();
         }
 
 
